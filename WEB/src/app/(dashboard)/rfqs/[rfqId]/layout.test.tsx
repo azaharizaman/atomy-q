@@ -7,7 +7,6 @@ import { renderWithProviders } from '@/test/utils';
 const mockUseRfq = vi.fn();
 const mockUseFeatureFlags = vi.fn();
 let mockPathname = '/rfqs/rfq-1/overview';
-const mockRfqInsightsSidebar = vi.fn();
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -27,13 +26,6 @@ vi.mock('@/components/layout/main-sidebar-nav', () => ({
 
 vi.mock('@/components/workspace/active-record-menu', () => ({
   ActiveRecordMenu: () => <div data-testid="active-record" />,
-}));
-
-vi.mock('@/components/workspace/rfq-insights-sidebar', () => ({
-  RfqInsightsSidebar: (props: { defaultExpanded?: boolean }) => {
-    mockRfqInsightsSidebar(props);
-    return <div data-testid="insights-sidebar" />;
-  },
 }));
 
 vi.mock('@/hooks/use-rfq', () => ({
@@ -85,7 +77,7 @@ describe('RfqWorkspaceLayout', () => {
     expect(screen.getByTestId('footer')).toBeInTheDocument();
   });
 
-  it('keeps the RFQ insights sidebar open on overview', async () => {
+  it('does not render an RFQ insights sidebar on overview', async () => {
     mockUseRfq.mockReturnValue({
       data: {
         id: 'rfq-1',
@@ -108,12 +100,10 @@ describe('RfqWorkspaceLayout', () => {
       );
     });
 
-    expect(mockRfqInsightsSidebar).toHaveBeenCalledWith(expect.objectContaining({
-      defaultExpanded: true,
-    }));
+    expect(screen.queryByTestId('insights-sidebar')).not.toBeInTheDocument();
   });
 
-  it('collapses the RFQ insights sidebar by default outside overview', async () => {
+  it('does not render an RFQ insights sidebar outside overview either', async () => {
     mockPathname = '/rfqs/rfq-1/quote-intake/quote-1/normalize';
     mockUseRfq.mockReturnValue({
       data: {
@@ -137,8 +127,6 @@ describe('RfqWorkspaceLayout', () => {
       );
     });
 
-    expect(mockRfqInsightsSidebar).toHaveBeenCalledWith(expect.objectContaining({
-      defaultExpanded: false,
-    }));
+    expect(screen.queryByTestId('insights-sidebar')).not.toBeInTheDocument();
   });
 });

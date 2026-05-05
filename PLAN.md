@@ -1,138 +1,162 @@
-# Atomy-Q Frontend Stack Plan
+# Atomy-Q Frontend Stack Plan — Actual
 
-This document describes the recommended frontend stack and implementation plan for Atomy-Q, given a **Laravel API backend** (203 endpoints, JWT auth, multi-tenant). It serves as the single reference for frontend architecture and rollout order.
-
----
-
-## 1. Stack Overview
-
-| Layer | Choice | Purpose |
-|-------|--------|---------|
-| **Framework** | Next.js 16 (App Router) | Main app host, optional SSR, single deploy surface |
-| **API client** | OpenAPI-generated client | Type-safe calls aligned with API contract |
-| **Server state** | TanStack Query | Caching, loading, mutations, optimistic updates |
-| **Auth** | JWT + refresh in client + auth context/store | Token handling, tenant, redirects |
-| **Forms** | React Hook Form + Zod | Validation and DX aligned with API |
-| **UI** | Radix + Tailwind | Accessibility and styling |
-| **Design system** | Design-System-v2 as single source | One component set (package or copy) |
-| **Client state** | Zustand (or React context) | Sidebar, modals, theme |
-| **Tables** | TanStack Table | RFQ list, quote intake, data views |
-| **Toasts** | Sonner | Mutation and error feedback |
-| **Charts** | Recharts (optional) | Dashboard and analytics |
+This document describes the **actual** frontend stack and implementation in the Atomy-Q application. It reflects what is currently in use, not what was originally proposed. The backend is a **Laravel API** (203 endpoints, JWT auth, multi-tenant) served from the sibling `API/` directory.
 
 ---
 
-## 2. Rationale by Layer
+## 1. Stack Overview (Actual)
 
-### Framework: Next.js (App Router)
+| Layer | Choice | Package / Version | Notes |
+|-------|--------|-------------------|-------|
+| **Framework** | Next.js 16 (App Router) | `next@16.2.3` | React 19.2.3; all pages are `'use client'` |
+| **API client** | Axios (primary) + Hey API (partial) | `axios@^1.15.0` | Custom Axios instance at `lib/api.ts`; OpenAPI-generated SDK in `generated/api/` used by some hooks |
+| **Server state** | TanStack React Query | `@tanstack/react-query@^5.90.21` | All data fetching, caching, mutations |
+| **Auth** | JWT Bearer + refresh token | Zustand persist middleware | Access token in memory; refresh via `/auth/refresh`; auto-retry on 401 via Axios interceptor |
+| **Forms** | React Hook Form + Zod | `react-hook-form@^7.71.2`, `zod@^4.3.6` | `zodResolver` bridge; custom DS inputs wired via `form.register()` |
+| **UI** | Custom design system (`ds/`) | — | NOT Radix; custom-built Button, Input, DataTable, Card, Badge, Tabs, etc. |
+| **Styling** | Tailwind CSS v4 | `tailwindcss@^4` | `@theme inline` tokens in `globals.css`; semantic tokens in `lib/tokens.ts` |
+| **Style utils** | CVA + clsx + tailwind-merge | `class-variance-authority@^0.7.1` | Component variant composition |
+| **Icons** | Lucide React | `lucide-react@^0.577.0` | Single icon library |
+| **Client state** | Zustand | `zustand@^5.0.11` | Auth state only (`use-auth-store.ts`) with localStorage persistence |
+| **Tables** | Custom DataTable | — | NOT TanStack Table; custom `ds/DataTable.tsx` with sorting, selection, expansion, bulk actions |
+| **Toasts** | Sonner | `sonner@^2.0.7` | `<Toaster />` in root layout |
+| **Charts** | None installed | — | Dashboard uses stat cards + CSS progress bars; reporting page shows "Coming Soon" |
+| **Testing** | Vitest + Playwright | `vitest@^3.2.4`, `@playwright/test@^1.58.2` | Unit + E2E |
 
-- **quote-comparison-web** is already Next.js 16; no framework change.
-- Fits dashboard-style SaaS: optional SSR for landing/auth, static app shell, single deploy.
-- Allows future BFF route or proxy if needed.
+---
 
-### API Layer: OpenAPI Client + TanStack Query
+## 2. Architecture Details
 
-- **OpenAPI client:** Generate TypeScript client from Laravel API (OpenAPI/Swagger). Use for all `/api/v1/*` calls so the 203-endpoint surface stays type-safe and consistent.
-- **TanStack Query:** Use for all server state (RFQs, submissions, dashboard KPIs, etc.): caching, loading/error, refetch, optimistic updates.
-- Single pattern for “call API → show in UI” and “mutate → invalidate/optimistic.”
+### Framework: Next.js 16 App Router
 
-**Suggested tooling:** `openapi-fetch` or `@hey-api/openapi-ts` for the client; `@tanstack/react-query` for data fetching.
+- Route groups: `(auth)/` for login/register/forgot-password/reset-password, `(dashboard)/` for authenticated routes
+- Dynamic routes: `[rfqId]`, `[projectId]`, `[vendorId]`, `[approvalId]`, `[quoteId]`, `[runId]`, `[section]`
+- All pages use `'use client'` directive (client-side rendering throughout)
+- `Suspense` boundaries wrap navigation hooks in dashboard layout
+- Client-side route guards in `(dashboard)/layout.tsx` redirect to `/login` when unauthenticated
 
-### Auth: JWT + Refresh
+### API Layer: Axios Primary + Hey API Generated (Partial)
 
-- Store **access token** in memory (or short-lived cookie if API supports it); **refresh token** in httpOnly cookie or secure storage.
-- On load: call `GET /api/v1/me` (or equivalent); on 401, attempt refresh then redirect to sign-in.
-- Use a small **auth context or store** (user, tenant, login/logout) that provides the token to the API client and drives redirects.
-- Aligns with existing API JWT design; no heavy auth SDK unless OIDC/SSO is added later.
+- **Primary client**: Custom Axios instance (`lib/api.ts`)
+  - Bearer token injection via request interceptor
+  - Automatic JWT refresh on 401 (single retry, then redirect to login)
+  - `withCredentials: true` (cookies sent alongside Bearer tokens)
+  - Idempotency key support for specific POST paths
+- **OpenAPI-generated SDK**: `@hey-api/openapi-ts@^0.94.3` generates into `generated/api/` using `@hey-api/client-fetch`
+  - Used selectively by some hooks (`use-vendors.ts`, `use-users.ts`, `use-create-rfq-line-item.ts`, etc.)
+  - Most hooks bypass the generated SDK and use direct Axios via `fetchLiveOrFail` helper (`lib/api-live.ts`)
+- OpenAPI spec source: `openapi/openapi.json`
+
+### Auth: JWT Bearer + Refresh Token
+
+- **Access token**: kept in memory (Zustand store, NOT persisted)
+- **Refresh token**: stored via Zustand `persist` middleware (localStorage)
+- **Login flow**: native `fetch` POST to `/auth/login`, then `GET /me` for user data
+- **Session restoration**: `AuthProvider` in root layout calls `/auth/refresh` on page load
+- **Auto-retry**: Axios interceptor catches 401, attempts refresh once, retries original request
+- **SSO**: `/auth/sso` endpoint also available
+- **Multi-tenant**: `tenantId` stored in auth state; route guards verify both auth and tenant presence
 
 ### Forms: React Hook Form + Zod
 
-- **React Hook Form** for performance on large forms (Create RFQ, line items, settings).
-- **Zod** for schemas and validation; align with or derive from API DTOs so client validation matches backend.
+- Pattern: `useForm<T>()` with `zodResolver(schema)`
+- Custom DS inputs (`TextInput`, `TextAreaInput`, `SelectInput`, `Checkbox`, etc.) wired via `form.register()`
+- Used in: login, register-company, forgot-password, reset-password, RFQ details pages
+- Zod v4 schemas align with API DTOs for client-server validation parity
 
-### UI: Radix + Tailwind + One Design System
+### UI: Custom Design System (`ds/`)
 
-- **Radix UI** for accessible primitives (modals, dropdowns, tabs, etc.).
-- **Tailwind** for layout and styling.
-- Treat **Design-System-v2** (or the chosen canonical design app under `apps/atomy-q/`) as the single source: either publish as an internal package consumed by `quote-comparison-web`, or copy canonical components into the main app and keep Design-System-v2 as the showcase.
-- Prevents drift between canary apps and production UI.
+- Located at `WEB/src/components/ds/`
+- **NOT Radix UI** (only `@radix-ui/react-slot` is installed, used as a primitive)
+- Components: `Button`, `Input` family (TextInput, TextAreaInput, PasswordInput, SelectInput, Checkbox, ToggleSwitch, SearchInput), `DataTable`, `Card`, `Badge`, `Tabs`, `Progress`, `Timeline`, `FilterBar`, `KPIScorecard`, `OwnerCell`, `RecordHeader`, `HorizontalProcessTrack`, `StickyPageActions`
+- Variants composed with `class-variance-authority` (cva)
+- Design tokens defined in `lib/tokens.ts` and mapped to Tailwind utility classes
 
-### Client State: Zustand (or React Context)
+### Tables: Custom DataTable
 
-- Use **Zustand** (or a small React context) for UI state only: sidebar open/closed, active modal, theme. Optionally current tenant if needed outside auth.
-- Keep **server state** exclusively in TanStack Query.
+- **NOT TanStack Table** — fully custom `DataTable` component (`ds/DataTable.tsx`)
+- Features: `ColumnDef<T>` column definitions, sorting, row selection (checkboxes), expandable rows, bulk action toolbar, sticky header, loading/empty states, row click actions, overflow menu
+- Used for: RFQ list, quote intake, approval queue, vendor lists
 
-### Tables: TanStack Table
+### Charts
 
-- Keep **@tanstack/react-table** for RFQ list, quote intake tables, approval queue, etc., with existing config-driven columns and `DataTableView`-style abstraction.
+- **No charting library installed** (no Recharts, Chart.js, Nivo, etc.)
+- Dashboard displays stat cards and CSS-based progress bars (e.g., "Category Breakdown")
+- `/reporting` route shows a "Coming Soon" placeholder
 
-### Feedback and Charts
+### Client State: Zustand
 
-- **Toasts:** Sonner for mutation and error feedback.
-- **Charts:** Recharts for dashboard (spend trend, vendor scores) if already used in Design-System-v2; otherwise any small chart library is fine.
+- Single store: `use-auth-store.ts` — manages `user`, `isAuthenticated`, `refreshToken`
+- Uses `persist` middleware for localStorage (excludes short-lived access token)
+- Server state lives exclusively in TanStack Query
 
-### Routing and Permissions
+### Styling: Tailwind CSS v4
 
-- Use **Next.js App Router** and layout-based routes for main areas (dashboard, RFQs, approvals, settings).
-- Add **role/permission checks** in layout or page components (or a thin wrapper) that read from the auth store and redirect or show 403 when the user lacks permission. Optionally mirror the API permission model so the frontend hides UI the user cannot use.
+- Uses Tailwind v4 syntax: `@import "tailwindcss"` and `@theme inline` in `globals.css`
+- Custom font: Avenir Next (with system fallbacks)
+- Semantic design tokens in `lib/tokens.ts` mapped to Tailwind utility classes
+- Component variants via `class-variance-authority`
+
+### Toasts: Sonner
+
+- `<Toaster />` in root layout (`app/layout.tsx`)
+- Used via `toast.success()`, `toast.error()`, `toast.info()` across mutation hooks
 
 ---
 
-## 3. Implementation Order
+## 3. Implementation Status
 
-1. **OpenAPI + API client**  
-   Add OpenAPI spec to the Laravel API; generate the TypeScript client and wire it to use the JWT from the auth flow.
-
-2. **TanStack Query + auth**  
-   Add TanStack Query and an auth provider (login, logout, `/me`, refresh). Protect routes and attach the token to the API client.
-
-3. **Design system consolidation**  
-   Choose one design system source (e.g. Design-System-v2) and consume it from `quote-comparison-web` (package or copy).
-
-4. **Forms**  
-   Introduce React Hook Form + Zod on the next major form (e.g. Create RFQ or settings).
-
-5. **Client state**  
-   Add Zustand only when needed (e.g. sidebar state, global modal state).
+| Area | Status | Details |
+|------|--------|---------|
+| Auth flow | ✅ Complete | Login, register, forgot/reset password, JWT refresh, route guards |
+| API client | ✅ Complete | Axios wrapper + interceptors; partial Hey API SDK generation |
+| Design system | ✅ Complete | `ds/` directory with all core components |
+| Dashboard | ✅ Complete | Stat cards, RFQ overview, activity feed |
+| RFQ management | ✅ Complete | List, create, detail, line items, vendor assignment |
+| Vendor management | ✅ Complete | List, create, edit, detail |
+| Quote comparison | ✅ In progress | Intake, comparison views |
+| Approvals | ✅ Complete | Queue, detail, actions |
+| Reporting | 🚧 Placeholder | "Coming Soon" |
+| Charts | ❌ Not started | No library installed |
+| OpenAPI workflow | ⚠️ Partial | Spec exists; SDK generated but only partially adopted |
 
 ---
 
 ## 3.1 OpenAPI Ownership & Update Workflow
 
-- **Source of truth**: Laravel API repo generates the OpenAPI spec (`/openapi.json` or `/openapi.yaml`).
-- **Ownership**: Backend team owns schema updates; frontend consumes only the generated client.
-- **Generation**: Add a CI step that regenerates the OpenAPI spec on API changes and fails if the spec is stale.
-- **Client update**: Frontend runs a single `generate-client` script that pulls the spec and regenerates types.
+- **Source of truth**: OpenAPI spec at `openapi/openapi.json` (generated from Laravel API)
+- **Client generation**: `@hey-api/openapi-ts` generates into `generated/api/` using `@hey-api/client-fetch`
+- **Adoption**: Selective — some hooks use generated SDK, most use direct Axios via `fetchLiveOrFail`
+- **Gap**: No CI step enforcing spec freshness; no single `generate-client` script documented
 
 ## 3.2 JWT Storage & Refresh Strategy
 
-- **Access token**: keep in memory only.
-- **Refresh token**: store in httpOnly cookie set by the API.
-- **Refresh flow**: on 401, attempt refresh once and retry the request; if it fails, clear auth state and redirect to sign-in.
-- **Cross-tab sync**: use `BroadcastChannel` or `localStorage` events to propagate logout and token refresh across tabs.
+- **Access token**: memory only (Zustand store, excluded from `persist`)
+- **Refresh token**: Zustand `persist` middleware → localStorage
+- **Refresh flow**: Axios interceptor catches 401 → POST `/auth/refresh` → retry original request; if refresh fails, clear auth state and redirect to `/login`
+- **Cross-tab sync**: not implemented (no BroadcastChannel or storage events)
 
 ## 3.3 Multi-Tenant UX & Guarding
 
-- **Tenant context**: store `tenantId` in auth state; attach it to all API calls if required.
-- **Tenant switching**: explicit selector or "current tenant" control in the app shell.
-- **Guarding**: route guards check both auth and tenant presence; redirect to tenant selection if missing.
+- **Tenant context**: `tenantId` stored in auth state
+- **Guarding**: route guards in `(dashboard)/layout.tsx` check auth and redirect to `/login` when unauthenticated
 
 ## 3.4 API Error Normalization
 
-- Define a single error contract in the API client (e.g., `{ code, message, details }`).
-- Create a shared error parser that maps HTTP errors to UI-safe error objects.
-- Require all TanStack Query hooks to use the shared error parser.
+- Axios instance handles 401 auto-refresh
+- Error handling is distributed across individual hooks (no centralized error parser yet)
 
 ## 3.5 Frontend Testing Strategy
 
-- **Unit**: component tests for critical UI logic (forms, tables).
-- **Integration**: query hooks with MSW-based API mocks using the OpenAPI schema.
-- **E2E**: minimal Playwright flows (login, RFQ list, create RFQ, approval flow).
+- **Unit**: Vitest for component tests
+- **E2E**: Playwright for critical flows (login, RFQ list, create RFQ, approval flow)
+- **MSW**: not yet adopted for query hook testing
 
 ## 3.6 Mock Data & Dev Fixtures
 
-- Maintain a mock data pack aligned to the OpenAPI schema (MSW + JSON fixtures).
-- Ensure fixtures include multiple tenants and roles to exercise permissions and data isolation.
+- Not yet established (no MSW setup, no JSON fixture pack)
+
+---
 
 ## 4. Related Documents
 
@@ -143,4 +167,4 @@ This document describes the recommended frontend stack and implementation plan f
 
 ---
 
-*Last updated: 2026-03-12*
+*Last updated: 2026-05-05*

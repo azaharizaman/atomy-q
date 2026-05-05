@@ -65,7 +65,7 @@
         "azaharizaman/nexus-vendor": "*@dev",
         "azaharizaman/nexus-workflow": "*@dev",
         "azaharizaman/nexus-metric-engine": "*@dev",
-        "firebase/php-jwt": "^6.10",
+        "firebase/php-jwt": "^7.0",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "league/flysystem-aws-s3-v3": "^3.0"

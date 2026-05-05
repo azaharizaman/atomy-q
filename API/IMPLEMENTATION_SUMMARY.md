@@ -225,7 +225,7 @@ PASS (19 tests, 98 assertions).
 ### SSO (`POST /api/v1/auth/sso`) and full Identity coordinator
 
 - `AuthController` now injects `UserAuthenticationCoordinatorInterface` directly and uses it for both login and SSO; the controller no longer lazy-resolves the coordinator from the container.
-- `nexus/laravel-identity-adapter` registers `IdentityAdapterServiceProvider`, which wires `OidcSsoProviderAdapter`, `IdentityOperationsAdapter`, `LaravelPasswordHasher`, and the repository-backed RBAC query layer.
+- `azaharizaman/nexus-laravel-identity-adapter` registers `IdentityAdapterServiceProvider`, which wires `OidcSsoProviderAdapter`, `IdentityOperationsAdapter`, `LaravelPasswordHasher`, and the repository-backed RBAC query layer.
 - **Atomy-Q bindings** (see `App\Providers\AppServiceProvider` and `App\Services\Identity\*`):
   - **Eloquent-backed**: `UserPersistInterface`, `UserQueryInterface`, `PasswordHasherInterface`, `UserAuthenticatorInterface`, `SessionManagerInterface`, `PermissionQueryInterface`, and `RoleQueryInterface`.
   - **App-backed adapters**: `TokenManagerInterface` and `MfaEnrollmentServiceInterface` are still alpha stubs, while `MfaVerificationServiceInterface` and `AuditLogRepositoryInterface` are runtime implementations. Gap 7’s MFA extension persists `challenge_id`-backed login challenges and audit rows for login success/failure, MFA challenge issuance/verification, and logout.

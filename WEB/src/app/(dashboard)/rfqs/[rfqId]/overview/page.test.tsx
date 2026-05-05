@@ -6,29 +6,14 @@ import { renderWithProviders } from '@/test/utils';
 import RfqOverviewPage from './page';
 
 const mockUseRfqOverview = vi.fn();
-const mockUseRfqAiSummary = vi.fn();
 
 vi.mock('@/hooks/use-rfq-overview', () => ({
   useRfqOverview: (...args: unknown[]) => mockUseRfqOverview(...args),
 }));
 
-vi.mock('@/hooks/use-rfq-ai-summary', () => ({
-  useRfqAiSummary: (...args: unknown[]) => mockUseRfqAiSummary(...args),
-}));
-
 describe('RfqOverviewPage', () => {
   beforeEach(() => {
     mockUseRfqOverview.mockReset();
-    mockUseRfqAiSummary.mockReset();
-    mockUseRfqAiSummary.mockReturnValue({
-      summary: null,
-      isLoading: false,
-      isError: false,
-      error: null,
-      isHidden: false,
-      shouldShowUnavailableMessage: false,
-      messageKey: null,
-    });
   });
 
   it('renders the generic unavailable state when overview data is missing', async () => {
@@ -100,7 +85,7 @@ describe('RfqOverviewPage', () => {
       );
     });
 
-    expect(screen.getByText('Next step')).toBeInTheDocument();
+    expect(screen.queryByText('Next step')).not.toBeInTheDocument();
     expect(screen.getByText('Schedule')).toBeInTheDocument();
     expect(screen.getByText('Quotes received')).toBeInTheDocument();
     expect(screen.getByText('Pending approvals')).toBeInTheDocument();

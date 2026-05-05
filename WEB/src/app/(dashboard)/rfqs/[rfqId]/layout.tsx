@@ -9,7 +9,6 @@ import { Header } from '@/components/layout/header';
 import { AppFooter } from '@/components/layout/app-footer';
 import { MainSidebarNav } from '@/components/layout/main-sidebar-nav';
 import { ActiveRecordMenu } from '@/components/workspace/active-record-menu';
-import { RfqInsightsSidebar } from '@/components/workspace/rfq-insights-sidebar';
 import { EmptyState, SectionCard } from '@/components/ds/Card';
 import { isAlphaMode } from '@/lib/alpha-mode';
 import { getRfqRecordErrorMessage } from '@/lib/rfq-error-copy';
@@ -33,10 +32,6 @@ function getPrimaryActionLabel(status: RfqStatus): string {
   }
 }
 
-function isRfqOverviewPath(pathname: string): boolean {
-  return pathname.split('/').filter(Boolean).at(-1) === 'overview';
-}
-
 export default function RfqWorkspaceLayout({ children, params }: { children: React.ReactNode; params: Promise<{ rfqId: string }> }) {
   const pathname = usePathname();
   const [railExpanded, setRailExpanded] = React.useState(false);
@@ -46,7 +41,6 @@ export default function RfqWorkspaceLayout({ children, params }: { children: Rea
   const { data: rfq, isLoading, isError, error } = useRfq(rfqId);
   const { data: flags, isLoading: flagsLoading } = useFeatureFlags();
   const projectsLinkEnabled = flags?.projects === true;
-  const insightsSidebarExpanded = isRfqOverviewPath(pathname);
 
   const record = rfq
     ? {
@@ -151,7 +145,6 @@ export default function RfqWorkspaceLayout({ children, params }: { children: Rea
                   </div>
                 </div>
               </div>
-              <RfqInsightsSidebar rfqId={rfqId} defaultExpanded={insightsSidebarExpanded} />
             </div>
           </div>
         </div>

@@ -64,6 +64,7 @@
         "azaharizaman/nexus-uom": "*@dev",
         "azaharizaman/nexus-vendor": "*@dev",
         "azaharizaman/nexus-workflow": "*@dev",
+        "azaharizaman/nexus-metric-engine": "*@dev",
         "firebase/php-jwt": "^6.10",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",

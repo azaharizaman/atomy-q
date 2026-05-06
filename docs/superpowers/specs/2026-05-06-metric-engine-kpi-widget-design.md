@@ -1,8 +1,10 @@
 # MetricEngine KPI, Scorecard, and Widget Refactor Design
 
 Date: 2026-05-06
-Status: Approved for implementation planning
+Status: Revised after MetricEngine package update
 Scope: Atomy-Q API and WEB
+
+Revision note: after the Nexus team refactored `azaharizaman/nexus-metric-engine` and Atomy-Q pulled the updated package through Composer, this design no longer treats batch evaluation, formula catalogs, formula serialization, dependency graphs, neutral statuses, audit traces, run fingerprints, neutral banding, rounding modes, or typed period comparison as Atomy-Q responsibilities. Atomy-Q consumes those package capabilities and keeps the application, Laravel, tenant, domain, widget, and display boundaries.
 
 ## Purpose
 
@@ -50,14 +52,18 @@ Excluded:
 ## Design Principles
 
 - Atomy-Q owns metric production.
-- `Nexus\MetricEngine` owns metric calculation.
+- `Nexus\MetricEngine` owns deterministic formula mechanics: neutral formula definitions, formula catalogs, formula references, dependency graphs, scalar and time-series evaluation, result outcomes, audit traces, run fingerprints, neutral banding, rounding behavior, and typed period comparison.
+- Atomy-Q owns app-level metric identity, domain meaning, tenant scoping, source fact retrieval, Laravel wiring, widget composition, display metadata, authorization, endpoint compatibility, and frontend rendering.
 - No application service except the central metric evaluator should call `Nexus\MetricEngine` directly.
 - Metric keys are domain-canonical.
 - Widgets are screen-specific compositions of canonical metrics.
-- Backend owns calculation, metric identity, scorecard composition, availability state, and display-ready metadata.
+- Backend owns calculation orchestration, metric identity, scorecard composition, availability state, and display-ready metadata.
 - Frontend owns placement, layout, responsive behavior, interaction links, loading states, and rendering.
 - Source facts must be fetched in batches per widget set, not one query per card.
 - No-data and unavailable states must be explicit; synthetic zeros must not hide missing source domains.
+- MetricEngine status labels are neutral; Atomy-Q maps them to user-facing copy, tones, and domain semantics.
+- MetricEngine band labels must remain neutral if used directly. Domain labels such as "healthy", "risky", "preferred vendor", or "non-compliant" remain Atomy-Q domain language.
+- MetricEngine may apply caller-supplied unit and precision rules, but Atomy-Q must not treat it as a money/currency policy engine.
 
 ## Recommended Architecture
 
@@ -67,27 +73,48 @@ The API should introduce a centralized metric production layer:
 Controller
   -> WidgetCompositionService
     -> MetricEvaluationService
-      -> MetricCatalog
+      -> AppMetricDefinitionCatalog
+      -> Nexus FormulaCatalog
       -> MetricInputRegistry
         -> Domain Input Providers
-      -> Nexus\MetricEngine
+      -> Nexus\MetricEngine BatchFormulaEvaluatorService
 ```
 
-### MetricCatalog
+### MetricEngine Capability Baseline
 
-`MetricCatalog` owns all system metric definitions.
+The installed package now exposes the following capabilities that this design can rely on:
+
+- `FormulaCatalog` and `FormulaCatalogBuilderService` for immutable in-memory formula sets.
+- `FormulaDefinitionSerializerService` for array-backed formula definitions.
+- `FormulaReference` and `FormulaGraphService` for explicit formula dependencies, topological ordering, cycle detection, and missing-reference validation.
+- `BatchFormulaEvaluatorService` for evaluating many formulas into keyed outcomes.
+- `MetricEvaluationOutcome` and `MetricResultStatus` for `available`, `no_data`, `not_available`, and `error`.
+- `MetricAuditTrace` and `MetricEvaluationOptions::withAuditTrace()` for deterministic explanation payloads.
+- `MetricRunFingerprintService` for stable hashes over formulas, dependency graph, prepared inputs, and caller metadata.
+- `BandedScoreService`, `BandDefinition`, and `BandedScore` for neutral banding.
+- `PeriodKey`, `PeriodComparatorService`, and period granularity enums for typed period handling.
+- `PrecisionPolicy` and `RoundingMode` for caller-controlled rounding behavior.
+
+The package remains framework-agnostic. Laravel service providers, cache stores, repository bindings, route concerns, and application policy remain outside MetricEngine.
+
+### AppMetricDefinitionCatalog
+
+`AppMetricDefinitionCatalog` owns Atomy-Q's system metric definitions and converts their formula portion into a Nexus `FormulaCatalog`.
 
 It defines:
 
 - metric key
 - label
 - value type
-- formula definition
+- Nexus formula definition or serialized formula payload
 - required inputs
 - domain/context requirements
 - display hints
 - precision and unit rules
 - availability rules
+- domain status mapping rules
+- optional neutral band definitions
+- widget reuse metadata
 
 Example canonical metric keys:
 
@@ -151,12 +178,15 @@ Example contexts:
 It handles:
 
 - building `MetricInput` and `MetricSeries`
-- evaluating scalar formulas
-- evaluating time-series formulas
-- mapping MetricEngine exceptions into stable application statuses
+- building or loading the Nexus `FormulaCatalog`
+- calling `BatchFormulaEvaluatorService`
+- mapping `MetricEvaluationOutcome` and `MetricResultStatus` into stable application DTO statuses
 - formatting raw results into application metric DTOs
-- preserving reproducible metadata
+- attaching app display metadata and user-facing reason text
+- attaching package audit traces when requested by debug/admin workflows
+- attaching package run fingerprints when reproducibility matters
 - request-level memoization
+- Laravel service construction and dependency wiring
 
 Metric status values:
 
@@ -169,7 +199,7 @@ Metric status values:
 
 `ScorecardService` groups metric results into scorecards.
 
-Numeric scores should be produced through `MetricEvaluationService`. Domain warning flags may remain domain rules until `Nexus\MetricEngine` supports rule/banding semantics.
+Numeric scores should be produced through `MetricEvaluationService`. Neutral numeric bands may use MetricEngine's `BandedScoreService`, but domain meaning and scorecard copy remain Atomy-Q rules. Domain warning flags still belong in domain code when they are not pure numeric formulas.
 
 Initial scorecards:
 
@@ -413,10 +443,15 @@ Existing components should be adapted where practical:
 ### Phase 1: Backend Foundation
 
 - Add Atomy-Q metric DTOs for metric cards, scorecards, widgets, statuses, trends, and progress.
-- Add `MetricCatalog` with system-owned metric definitions.
+- Add `AppMetricDefinitionCatalog` with system-owned metric definitions and Nexus formula payloads.
 - Add `MetricInputRegistry` and domain input providers.
 - Add `MetricEvaluationService` as the only app service that calls `Nexus\MetricEngine`.
-- Add exception/status mapping for no-data, unavailable, invalid input, divide-by-zero, and source-domain-not-implemented cases.
+- Wire MetricEngine services in Atomy-Q's Laravel container or an Atomy-Q-owned adapter provider, not inside the Layer 1 package.
+- Use `FormulaCatalogBuilderService` or `FormulaDefinitionSerializerService` to construct the Nexus `FormulaCatalog`.
+- Use `BatchFormulaEvaluatorService` for widget-set evaluation.
+- Map `MetricEvaluationOutcome` statuses into Atomy-Q DTO statuses and user-facing reasons.
+- Preserve optional `MetricAuditTrace` and `MetricRunFingerprint` fields for audit/debug contexts.
+- Add app-only source-domain status mapping for cases MetricEngine cannot know, such as provider-not-implemented or tenant feature unavailable.
 
 ### Phase 2: Dashboard Migration
 
@@ -434,25 +469,29 @@ Existing components should be adapted where practical:
 ### Phase 4: Vendor Governance Migration
 
 - Convert numeric score production in `VendorGovernanceScoreService` to centralized scorecard metrics.
-- Keep warning flag rules in domain code unless or until `Nexus\MetricEngine` supports rule/banding semantics.
+- Use MetricEngine neutral banding only for numeric ranges where useful.
+- Keep vendor governance labels, warnings, eligibility language, and risk/compliance meaning in Atomy-Q domain code.
 - Return the same governance scorecard anywhere it is needed.
 
 ### Phase 5: Reporting Migration
 
 - Replace reporting KPI and spend calculations with shared metric definitions.
 - Reuse dashboard/procurement metrics where concepts are identical.
-- Add time-series support through MetricEngine primitives where practical.
+- Use MetricEngine time-series primitives and typed period handling for trend and period-over-period metrics.
+- Keep money/currency interpretation, FX rules, and accounting semantics outside MetricEngine.
 
 ## Testing Strategy
 
 Backend tests:
 
-- Unit test each metric formula definition.
-- Unit test MetricEngine exception-to-status mapping.
+- Unit test each Atomy-Q metric definition and formula serialization payload.
+- Unit test Atomy-Q mapping from `MetricEvaluationOutcome` to application DTO statuses and reason text.
 - Feature test dashboard KPI endpoints still return compatible responses.
 - Feature test widget payloads for dashboard, RFQ overview, vendor governance, and reporting.
 - Regression test tenant scoping for every input provider.
 - Test no-data cases explicitly.
+- Test audit trace and fingerprint presence only where the app explicitly requests them.
+- Add package integration smoke tests around `BatchFormulaEvaluatorService`, `FormulaReference`, neutral bands, rounding mode, and typed period inputs rather than duplicating MetricEngine's own unit suite.
 
 Frontend tests:
 
@@ -464,30 +503,40 @@ Frontend tests:
 
 ## Risks
 
-- `Nexus\MetricEngine` is calculation-only, so Atomy-Q must still own catalog, persistence, domain fetching, widget composition, and display metadata.
+- Atomy-Q may accidentally duplicate package mechanics now provided by MetricEngine. The implementation plan must consume package services directly through the central evaluator.
+- MetricEngine remains domain-neutral, so Atomy-Q must still own persistence, domain fetching, tenant scoping, widget composition, display metadata, and user-facing semantics.
 - If metric definitions are screen-specific instead of domain-canonical, reuse will fail.
 - If each card triggers its own query, dashboard performance will degrade.
 - Existing frontend tests may assume page-local fallback/mock calculations.
-- Scorecards with warning flags may not fit pure numeric formulas.
+- Scorecards with warning flags may not fit pure numeric formulas and should not be forced into MetricEngine bands.
 - Existing endpoint compatibility matters during migration.
+- Package version drift can change exact class signatures. The implementation plan should verify the installed `API/vendor/azaharizaman/nexus-metric-engine` API before coding.
 
-## MetricEngine Maintainer Feedback Pack
+## MetricEngine Boundary Decision Log
 
-The following package changes would make this Atomy-Q refactor simpler and more reproducible:
+The earlier maintainer feedback pack has been superseded by the Nexus response and installed package surface.
 
-- Add batch formula evaluation.
-- Add formula registry/catalog support.
-- Add array/config serialization for `FormulaDefinition`.
-- Add dependency graph support for formulas that consume other formula results.
-- Add result status semantics for `available`, `no_data`, `not_available`, and `error`.
-- Add optional audit/explanation output with formula id, operands, inputs, excluded values, and result.
-- Add score threshold/banding helpers for scorecards.
-- Add Laravel service provider bindings.
-- Add cache/fingerprint helpers for reproducible metric runs.
-- Honor `RoundingMode` in `PrecisionPolicy`; the current implementation appears to always round half-up.
-- Strengthen time-series period handling beyond lexical string comparison.
-- Add money/currency-aware precision helpers.
+Delivered in MetricEngine and consumed by this design:
+
+- Batch formula evaluation.
+- Formula registry/catalog support.
+- Array/config serialization for `FormulaDefinition`.
+- Dependency graph support through explicit `FormulaReference`.
+- Neutral result statuses through `MetricEvaluationOutcome`.
+- Optional deterministic audit/explanation output.
+- Neutral score banding helpers.
+- Run fingerprint helpers.
+- `RoundingMode` support in `PrecisionPolicy`.
+- Stronger period handling through typed period keys and comparators.
+
+Still outside MetricEngine and owned by Atomy-Q or another package:
+
+- Laravel service provider bindings for this application.
+- Domain scorecard meaning, health/risk/compliance labels, and user-facing remediation language.
+- Cache storage and invalidation.
+- Money/currency semantics, FX rules, accounting policy, and finance-specific value objects.
+- YAML/JSON file loading. MetricEngine handles array serialization; Atomy-Q owns config file loading if it later chooses to store formula definitions outside code.
 
 ## Approval
 
-The design direction was approved in chat on 2026-05-06. Implementation planning should proceed from this document and keep user-created widgets out of scope for the first slice.
+The original design direction was approved in chat on 2026-05-06. This revision incorporates the Nexus MetricEngine package update pulled into Atomy-Q on 2026-05-06. Implementation planning should proceed from this revised document and keep user-created widgets out of scope for the first slice.

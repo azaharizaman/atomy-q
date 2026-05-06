@@ -1869,16 +1869,16 @@
         },
         {
             "name": "azaharizaman/nexus-metric-engine",
-            "version": "v0.1.0-alpha1",
+            "version": "v0.1.1-alpha1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/azaharizaman/nexus-metric-engine.git",
-                "reference": "e00e22a02e4015af629c964bca3a90dfc601151b"
+                "reference": "284b2b5282ffb580dbf87f4405dffeac2e0de77e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/azaharizaman/nexus-metric-engine/zipball/e00e22a02e4015af629c964bca3a90dfc601151b",
-                "reference": "e00e22a02e4015af629c964bca3a90dfc601151b",
+                "url": "https://api.github.com/repos/azaharizaman/nexus-metric-engine/zipball/284b2b5282ffb580dbf87f4405dffeac2e0de77e",
+                "reference": "284b2b5282ffb580dbf87f4405dffeac2e0de77e",
                 "shasum": ""
             },
             "require": {
@@ -1906,8 +1906,13 @@
             "description": "Deterministic Layer 1 metric calculation engine for Nexus packages.",
             "homepage": "https://github.com/azaharizaman/nexus-metric-engine",
             "keywords": [
+                "Audit",
+                "Fingerprint",
                 "Metrics",
+                "banded-scores",
+                "batch",
                 "calculation",
+                "catalog",
                 "formula",
                 "nexus",
                 "time-series"
@@ -1916,7 +1921,7 @@
                 "issues": "https://github.com/azaharizaman/nexus-metric-engine/issues",
                 "source": "https://github.com/azaharizaman/nexus-metric-engine"
             },
-            "time": "2026-05-05T20:50:07+00:00"
+            "time": "2026-05-06T06:00:52+00:00"
         },
         {
             "name": "azaharizaman/nexus-notifier",

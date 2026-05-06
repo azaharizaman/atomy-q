@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchLiveOrFail } from '@/lib/api-live';
 import type { RfqStatus } from '@/hooks/use-rfqs';
+import type { WidgetPayload } from '@/types/metrics';
 
 export interface RfqOverviewRfq {
   id: string;
@@ -65,6 +66,10 @@ export interface RfqOverviewData {
   comparison_runs_count: number;
   approvals: RfqOverviewApprovals;
   activity: RfqOverviewActivityItem[];
+  widgets?: WidgetPayload[];
+  widget_meta?: {
+    fingerprint?: string;
+  };
 }
 
 function normalizeActivityList(raw: unknown): RfqOverviewActivityItem[] {
@@ -179,6 +184,11 @@ function normalizeOverviewPayload(payload: unknown): RfqOverviewData {
       overall: (app?.overall as RfqOverviewApprovals['overall']) ?? 'none',
     },
     activity,
+    widgets: Array.isArray(d?.widgets) ? (d.widgets as WidgetPayload[]) : undefined,
+    widget_meta:
+      d?.widget_meta !== null && typeof d?.widget_meta === 'object' && !Array.isArray(d.widget_meta)
+        ? (d.widget_meta as RfqOverviewData['widget_meta'])
+        : undefined,
   };
 }
 

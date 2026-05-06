@@ -12,9 +12,14 @@ let aiStatusData = {
 };
 
 const mockUseReportingAiSummary = vi.fn();
+const mockFetchLiveOrFail = vi.fn();
 
 vi.mock('@/hooks/use-ai-status', () => ({
   useAiStatus: () => aiStatusData,
+}));
+
+vi.mock('@/lib/api-live', () => ({
+  fetchLiveOrFail: (...args: unknown[]) => mockFetchLiveOrFail(...args),
 }));
 
 vi.mock('@/hooks/use-reporting-ai-summary', () => ({
@@ -26,6 +31,7 @@ import ReportingPage from './page';
 describe('ReportingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetchLiveOrFail.mockResolvedValue({ data: { widgets: [] } });
     aiStatusData = {
       shouldHideAiControls: () => false,
       shouldShowUnavailableMessage: () => false,
@@ -81,5 +87,44 @@ describe('ReportingPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Reporting' })).toBeInTheDocument();
     expect(screen.queryByText('Reporting trends are stable.')).not.toBeInTheDocument();
+  });
+
+  it('renders reporting widgets from the backend widget payload when available', async () => {
+    mockUseReportingAiSummary.mockReturnValue({
+      summary: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+      isHidden: false,
+      shouldShowUnavailableMessage: false,
+      messageKey: null,
+    });
+    mockFetchLiveOrFail.mockResolvedValue({
+      data: {
+        widgets: [
+          {
+            key: 'reporting.kpi_summary_widget',
+            title: 'KPI Summary',
+            kind: 'metric_grid',
+            status: 'available',
+            cards: [
+              {
+                key: 'reporting.total_spend',
+                label: 'Total Spend',
+                value: 9000,
+                formattedValue: 'USD 9,000.00',
+                status: 'available',
+              },
+            ],
+          },
+        ],
+      },
+      meta: { fingerprint: 'reporting-widget-fingerprint' },
+    });
+
+    renderWithProviders(<ReportingPage />);
+
+    expect(await screen.findByText('KPI Summary')).toBeInTheDocument();
+    expect(screen.getByText('USD 9,000.00')).toBeInTheDocument();
   });
 });

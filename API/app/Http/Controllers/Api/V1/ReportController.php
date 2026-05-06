@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\ExtractsAuthContext;
 use App\Http\Controllers\Controller;
+use App\Services\Metrics\WidgetCompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Nexus\InsightOperations\Contracts\ReportingInsightCoordinatorInterface;
@@ -21,6 +22,7 @@ final class ReportController extends Controller
 
     public function __construct(
         private readonly ReportingInsightCoordinatorInterface $reportingInsightCoordinator,
+        private readonly WidgetCompositionService $widgetCompositionService,
     ) {}
 
     /**
@@ -114,6 +116,18 @@ final class ReportController extends Controller
             $this->reportingInsightCoordinator
                 ->generate($tenantId, "report_spend_by_category", $userId)
                 ->toResponseArray(),
+        );
+    }
+
+    /**
+     * Get reporting widgets.
+     *
+     * GET /reports/widgets
+     */
+    public function widgets(Request $request): JsonResponse
+    {
+        return response()->json(
+            $this->widgetCompositionService->reportingWidgets($this->tenantId($request)),
         );
     }
 

@@ -124,4 +124,58 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Awards In Flight')).toBeInTheDocument();
     expect(screen.getByText('$4.3M')).toBeInTheDocument();
   });
+
+  it('renders dashboard metric widgets from the backend widget payload when available', async () => {
+    mockUseDashboardAiSummary.mockReturnValue({
+      summary: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    mockFetchLiveOrFail.mockImplementation((endpoint: string) => {
+      if (endpoint === '/dashboard/widgets') {
+        return Promise.resolve({
+          data: {
+            widgets: [
+              {
+                key: 'dashboard.procurement_pipeline_widget',
+                title: 'Procurement Pipeline',
+                kind: 'metric_grid',
+                status: 'available',
+                cards: [
+                  {
+                    key: 'procurement.active_rfqs',
+                    label: 'Active RFQs',
+                    value: 55,
+                    formattedValue: '55',
+                    status: 'available',
+                  },
+                ],
+              },
+            ],
+          },
+          meta: { fingerprint: 'widget-fingerprint' },
+        });
+      }
+
+      if (endpoint === '/dashboard/kpis') {
+        return Promise.resolve({
+          data: {
+            active_rfqs: 44,
+            pending_approvals: 8,
+            quote_intake_count: 40,
+            awards_in_flight: 2,
+            total_savings: 4308228.53,
+          },
+        });
+      }
+
+      return Promise.resolve({ data: [] });
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Procurement Pipeline')).toBeInTheDocument();
+    expect(screen.getByText('55')).toBeInTheDocument();
+  });
 });

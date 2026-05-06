@@ -6,11 +6,13 @@ namespace App\Adapters\InsightOperations;
 
 use App\Models\VendorEvidence;
 use App\Models\VendorFinding;
+use App\Services\Metrics\MetricEvaluationService;
 use App\Services\VendorGovernanceScoreService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Nexus\InsightOperations\Contracts\GovernanceFactsPortInterface;
 use Nexus\InsightOperations\DTOs\GovernanceFactsDto;
+use Nexus\MetricEngine\ValueObjects\MetricInput;
 
 /**
  * Builds tenant-scoped vendor governance facts from evidence and finding records.
@@ -20,9 +22,10 @@ use Nexus\InsightOperations\DTOs\GovernanceFactsDto;
  */
 final readonly class GovernanceFactsAdapter implements GovernanceFactsPortInterface
 {
-    public function __construct(private VendorGovernanceScoreService $scoreService)
-    {
-    }
+    public function __construct(
+        private VendorGovernanceScoreService $scoreService,
+        private MetricEvaluationService $metricEvaluationService,
+    ) {}
 
     public function factsForVendor(string $tenantId, string $vendorId): GovernanceFactsDto
     {
@@ -39,6 +42,21 @@ final readonly class GovernanceFactsAdapter implements GovernanceFactsPortInterf
             ->orderBy('id')
             ->get();
         $summary = $this->scoreService->summarize($evidence, $findings);
+        $scoreMetrics = $this->metricEvaluationService->evaluate(
+            metricKeys: [
+                'vendor.esg_score',
+                'vendor.compliance_health_score',
+                'vendor.risk_watch_score',
+                'vendor.evidence_freshness_score',
+            ],
+            inputs: [
+                'vendor.esg_score.input' => new MetricInput('vendor.esg_score.input', $summary['scores']['esg_score']),
+                'vendor.compliance_health_score.input' => new MetricInput('vendor.compliance_health_score.input', $summary['scores']['compliance_health_score']),
+                'vendor.risk_watch_score.input' => new MetricInput('vendor.risk_watch_score.input', $summary['scores']['risk_watch_score']),
+                'vendor.evidence_freshness_score.input' => new MetricInput('vendor.evidence_freshness_score.input', $summary['scores']['evidence_freshness_score']),
+            ],
+            metadata: ['tenant_id' => $tenantId, 'vendor_id' => $vendorId, 'surface' => 'vendor.governance'],
+        );
         $sanctionsScreenings = $evidence
             ->filter(static fn (VendorEvidence $record): bool => (string) $record->type === 'sanctions_screening')
             ->map(fn (VendorEvidence $record): array => $this->serializeEvidence($record))
@@ -49,7 +67,12 @@ final readonly class GovernanceFactsAdapter implements GovernanceFactsPortInterf
             vendorId: $vendorId,
             evidence: $evidence->map(fn (VendorEvidence $record): array => $this->serializeEvidence($record))->values()->all(),
             findings: $findings->map(fn (VendorFinding $record): array => $this->serializeFinding($record))->values()->all(),
-            scores: $summary['scores'],
+            scores: [
+                'esg_score' => (int) $scoreMetrics['cards']['vendor.esg_score']->value,
+                'compliance_health_score' => (int) $scoreMetrics['cards']['vendor.compliance_health_score']->value,
+                'risk_watch_score' => (int) $scoreMetrics['cards']['vendor.risk_watch_score']->value,
+                'evidence_freshness_score' => (int) $scoreMetrics['cards']['vendor.evidence_freshness_score']->value,
+            ],
             warningFlags: $summary['warning_flags'],
             sanctionsScreenings: $sanctionsScreenings,
             dueDiligenceStatus: $this->dueDiligenceStatus($evidence, $findings),

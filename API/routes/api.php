@@ -111,6 +111,7 @@ Route::middleware(['jwt.auth', 'tenant'])->group(function (): void {
     // --- Section 2: Dashboard (6 endpoints) ---
     Route::prefix('dashboard')->group(function (): void {
         Route::get('kpis', [DashboardController::class, 'kpis']);
+        Route::get('widgets', [DashboardController::class, 'widgets']);
         Route::post('kpis/generate', [DashboardController::class, 'generateKpisSummary']);
         Route::get('spend-trend', [DashboardController::class, 'spendTrend']);
         Route::get('vendor-scores', [DashboardController::class, 'vendorScores']);
@@ -200,6 +201,7 @@ Route::middleware(['jwt.auth', 'tenant'])->group(function (): void {
         Route::get('{id}/performance', [VendorController::class, 'performance']);
         Route::get('{id}/compliance', [VendorController::class, 'compliance']);
         Route::get('{id}/history', [VendorController::class, 'history']);
+        Route::get('{id}/widgets', [VendorGovernanceController::class, 'widgets']);
         Route::get('{id}/governance', [VendorGovernanceController::class, 'show']);
         Route::post('{id}/governance/generate', [VendorGovernanceController::class, 'generate']);
 
@@ -374,6 +376,7 @@ Route::middleware(['jwt.auth', 'tenant'])->group(function (): void {
     // --- Section 21: Reports & Analytics (14 endpoints) ---
     Route::prefix('reports')->group(function (): void {
         Route::get('kpis', [ReportController::class, 'kpis']);
+        Route::get('widgets', [ReportController::class, 'widgets']);
         Route::post('kpis/generate', [ReportController::class, 'generateKpisSummary']);
         Route::get('spend-trend', [ReportController::class, 'spendTrend']);
         Route::post('spend-trend/generate', [ReportController::class, 'generateSpendTrendSummary']);

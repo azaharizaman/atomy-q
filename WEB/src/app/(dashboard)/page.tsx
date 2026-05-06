@@ -18,6 +18,8 @@ import { AiNarrativePanel } from '@/components/ai/ai-narrative-panel';
 import { useDashboardAiSummary } from '@/hooks/use-dashboard-ai-summary';
 import { fetchLiveOrFail } from '@/lib/api-live';
 import { formatCompactCurrency } from '@/lib/format-compact-metric';
+import { DashboardWidgetRenderer } from '@/components/metrics/DashboardWidgetRenderer';
+import type { WidgetPayload } from '@/types/metrics';
 import {
   ActivitySummaryCard,
   type ActivitySummaryItem,
@@ -42,6 +44,12 @@ type DashboardKpis = {
 
 type DashboardKpisResponse = DashboardKpis | {
   data?: DashboardKpis;
+};
+
+type DashboardWidgetsResponse = {
+  data?: {
+    widgets?: WidgetPayload[];
+  };
 };
 
 function isDashboardKpisWrapper(response: DashboardKpisResponse): response is { data?: DashboardKpis } {
@@ -93,6 +101,19 @@ export default function DashboardPage() {
     },
   });
 
+  const { data: widgets } = useQuery({
+    queryKey: ['dashboard', 'widgets'],
+    queryFn: async () => {
+      try {
+        const data = await fetchLiveOrFail<DashboardWidgetsResponse>('/dashboard/widgets');
+        return Array.isArray(data?.data?.widgets) ? data.data.widgets : [];
+      } catch (e) {
+        console.error('Failed to load dashboard widgets:', e);
+        return [];
+      }
+    },
+  });
+
   const { data: activity, isLoading: isLoadingActivity } = useQuery({
     queryKey: ['dashboard', 'activity'],
     queryFn: async () => {
@@ -124,6 +145,8 @@ export default function DashboardPage() {
     intake: Number(kpis?.quote_intake_count ?? 0),
     awards: Number(kpis?.awards_in_flight ?? 0),
   };
+
+  const procurementPipelineWidget = widgets?.find((widget) => widget.key === 'dashboard.procurement_pipeline_widget');
 
   const savingsValue =
     formatCompactCurrency(kpis?.total_savings ?? 0, 'USD');
@@ -174,27 +197,31 @@ export default function DashboardPage() {
         hideWhenEmpty
       />
 
-      <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: 'Active RFQs', count: pipeline.active, icon: <FileText size={16} /> },
-          { label: 'Pending Approvals', count: pipeline.pending, icon: <CheckCircle2 size={16} /> },
-          { label: 'Quotes In Intake', count: pipeline.intake, icon: <Inbox size={16} /> },
-          { label: 'Awards In Flight', count: pipeline.awards, icon: <HandCoins size={16} /> },
-        ].map((item, index) => (
-          <div
-            key={item.label}
-            className="h-full animate-fade-up"
-            style={{ animationDelay: `${index * 80}ms` }}
-          >
-            <PipelineStatCard
-              label={item.label}
-              count={item.count}
-              icon={item.icon}
-              onClick={() => router.push('/rfqs')}
-            />
-          </div>
-        ))}
-      </div>
+      {procurementPipelineWidget ? (
+        <DashboardWidgetRenderer widget={procurementPipelineWidget} />
+      ) : (
+        <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'Active RFQs', count: pipeline.active, icon: <FileText size={16} /> },
+            { label: 'Pending Approvals', count: pipeline.pending, icon: <CheckCircle2 size={16} /> },
+            { label: 'Quotes In Intake', count: pipeline.intake, icon: <Inbox size={16} /> },
+            { label: 'Awards In Flight', count: pipeline.awards, icon: <HandCoins size={16} /> },
+          ].map((item, index) => (
+            <div
+              key={item.label}
+              className="h-full animate-fade-up"
+              style={{ animationDelay: `${index * 80}ms` }}
+            >
+              <PipelineStatCard
+                label={item.label}
+                count={item.count}
+                icon={item.icon}
+                onClick={() => router.push('/rfqs')}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid items-stretch gap-4 lg:grid-cols-[1.3fr,1fr]">
         <div className="h-full animate-fade-up" style={{ animationDelay: '120ms' }}>

@@ -6,6 +6,9 @@ namespace App\Adapters\InsightOperations;
 
 use App\Models\Award;
 use App\Models\Rfq;
+use App\Services\Metrics\MetricCardData;
+use App\Services\Metrics\MetricEvaluationService;
+use App\Services\Metrics\MetricInputRegistry;
 use Nexus\InsightOperations\Contracts\ReportingFactsPortInterface;
 use Nexus\InsightOperations\DTOs\MetricFactDto;
 use Nexus\InsightOperations\DTOs\ReportingFactsDto;
@@ -19,6 +22,11 @@ use Nexus\InsightOperations\DTOs\ReportingFactsDto;
  */
 final readonly class ReportingFactsAdapter implements ReportingFactsPortInterface
 {
+    public function __construct(
+        private MetricInputRegistry $inputRegistry,
+        private MetricEvaluationService $metricEvaluationService,
+    ) {}
+
     public function factsForTenant(string $tenantId, string $subjectType): ReportingFactsDto
     {
         $tenantId = trim($tenantId);
@@ -38,18 +46,22 @@ final readonly class ReportingFactsAdapter implements ReportingFactsPortInterfac
 
     private function kpiFacts(string $tenantId, string $subjectType): ReportingFactsDto
     {
-        $totalSpend = $this->awardQuery($tenantId)->sum('amount');
-        $activeRfqs = Rfq::query()
-            ->where('tenant_id', $tenantId)
-            ->whereNotIn('status', ['cancelled', 'closed'])
-            ->count();
+        $evaluatedMetrics = $this->metricEvaluationService->evaluate(
+            metricKeys: [
+                'reporting.total_spend',
+                'reporting.active_rfqs',
+                'reporting.total_savings',
+            ],
+            inputs: $this->inputRegistry->reporting($tenantId),
+            metadata: ['tenant_id' => $tenantId, 'surface' => 'reporting.kpis'],
+        );
 
         return new ReportingFactsDto(
             subjectType: $subjectType,
             metrics: [
-                new MetricFactDto('total_spend', round((float) $totalSpend, 2)),
-                new MetricFactDto('active_rfqs', $activeRfqs),
-                new MetricFactDto('savings', $this->savings($tenantId)),
+                $this->toFact('total_spend', $evaluatedMetrics['cards']['reporting.total_spend']),
+                $this->toFact('active_rfqs', $evaluatedMetrics['cards']['reporting.active_rfqs']),
+                $this->toFact('savings', $evaluatedMetrics['cards']['reporting.total_savings']),
             ],
         );
     }
@@ -131,5 +143,15 @@ final readonly class ReportingFactsAdapter implements ReportingFactsPortInterfac
         }
 
         return round($total, 2);
+    }
+
+    private function toFact(string $key, MetricCardData $card): MetricFactDto
+    {
+        return new MetricFactDto(
+            $key,
+            $card->value,
+            $card->status,
+            $card->reason,
+        );
     }
 }

@@ -13,6 +13,7 @@ import { Timeline, type TimelineEvent } from '@/components/ds/Timeline';
 import { useRfqOverview, type RfqOverviewActivityItem } from '@/hooks/use-rfq-overview';
 import { RfqScheduleTimeline } from '@/components/workspace/rfq-schedule-timeline';
 import { getRfqOverviewErrorMessage } from '@/lib/rfq-error-copy';
+import { DashboardWidgetRenderer } from '@/components/metrics/DashboardWidgetRenderer';
 
 function formatRelativeTime(iso: string): string {
   const date = new Date(iso);
@@ -63,6 +64,7 @@ export default function RfqOverviewPage({ params }: { params: Promise<{ rfqId: s
   const comparisonRunCount = overview?.comparison_runs_count ?? (comparison ? 1 : 0);
   const approvals = overview?.approvals;
   const activityEvents = (overview?.activity ?? []).map(activityToTimelineEvent);
+  const progressWidget = overview?.widgets?.find((widget) => widget.key === 'rfq.overview_progress_widget');
 
   const scheduleContext = React.useMemo(
     () => ({
@@ -139,47 +141,51 @@ export default function RfqOverviewPage({ params }: { params: Promise<{ rfqId: s
   return (
     <div className="space-y-5">
       {/* 4 KPI scorecards */}
-      <div className="grid items-stretch gap-4 xl:grid-cols-4 md:grid-cols-2">
-        <Link href={`/rfqs/${encodeURIComponent(rfqId)}/quote-intake`} className="block h-full">
-          <KPIScorecard
-            title="Quotes received"
-            value={quoteCount}
-            subtitle={`Expected ${expectedQuotes}`}
-            progress={{ value: quoteProgress, type: 'bar' }}
-          />
-        </Link>
-        <Link href={`/rfqs/${encodeURIComponent(rfqId)}/quote-intake`} className="block h-full">
-          <KPIScorecard
-            title="Normalization progress"
-            value={`${Math.round(normProgress)}%`}
-            subtitle={`${acceptedQuotes}/${quoteCount} accepted`}
-            progress={{ value: normProgress, type: 'bar' }}
-          />
-        </Link>
-        <Link href={`/rfqs/${encodeURIComponent(rfqId)}/comparison-runs`} className="block h-full">
-          <KPIScorecard
-            title="Comparison runs"
-            value={comparisonRunCount}
-            subtitle={comparison ? 'Latest run available' : 'No runs yet'}
-            badge={
-              comparison ? (
-                <StatusBadge
-                  status={comparison.status === 'locked' ? 'approved' : comparison.is_preview ? 'preview' : 'draft'}
-                  label={comparison.is_preview ? 'preview' : comparison.status}
-                />
-              ) : undefined
-            }
-          />
-        </Link>
-        <Link href={`/rfqs/${encodeURIComponent(rfqId)}/approvals`} className="block h-full">
-          <KPIScorecard
-            title="Pending approvals"
-            value={approvals?.pending_count ?? 0}
-            subtitle={approvals?.overall === 'pending' ? 'Action required' : 'No gates triggered'}
-            badge={<StatusBadge status={approvalStatusBadge} label={approvalLabel} />}
-          />
-        </Link>
-      </div>
+      {progressWidget ? (
+        <DashboardWidgetRenderer widget={progressWidget} />
+      ) : (
+        <div className="grid items-stretch gap-4 xl:grid-cols-4 md:grid-cols-2">
+          <Link href={`/rfqs/${encodeURIComponent(rfqId)}/quote-intake`} className="block h-full">
+            <KPIScorecard
+              title="Quotes received"
+              value={quoteCount}
+              subtitle={`Expected ${expectedQuotes}`}
+              progress={{ value: quoteProgress, type: 'bar' }}
+            />
+          </Link>
+          <Link href={`/rfqs/${encodeURIComponent(rfqId)}/quote-intake`} className="block h-full">
+            <KPIScorecard
+              title="Normalization progress"
+              value={`${Math.round(normProgress)}%`}
+              subtitle={`${acceptedQuotes}/${quoteCount} accepted`}
+              progress={{ value: normProgress, type: 'bar' }}
+            />
+          </Link>
+          <Link href={`/rfqs/${encodeURIComponent(rfqId)}/comparison-runs`} className="block h-full">
+            <KPIScorecard
+              title="Comparison runs"
+              value={comparisonRunCount}
+              subtitle={comparison ? 'Latest run available' : 'No runs yet'}
+              badge={
+                comparison ? (
+                  <StatusBadge
+                    status={comparison.status === 'locked' ? 'approved' : comparison.is_preview ? 'preview' : 'draft'}
+                    label={comparison.is_preview ? 'preview' : comparison.status}
+                  />
+                ) : undefined
+              }
+            />
+          </Link>
+          <Link href={`/rfqs/${encodeURIComponent(rfqId)}/approvals`} className="block h-full">
+            <KPIScorecard
+              title="Pending approvals"
+              value={approvals?.pending_count ?? 0}
+              subtitle={approvals?.overall === 'pending' ? 'Action required' : 'No gates triggered'}
+              badge={<StatusBadge status={approvalStatusBadge} label={approvalLabel} />}
+            />
+          </Link>
+        </div>
+      )}
 
       <SectionCard title="Schedule" subtitle="Deadlines, planning milestones, and today on one axis">
         <RfqScheduleTimeline {...scheduleContext} />

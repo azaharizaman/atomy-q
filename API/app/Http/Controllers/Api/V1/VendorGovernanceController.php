@@ -10,6 +10,7 @@ use App\Http\Idempotency\IdempotencyCompletion;
 use App\Models\Vendor;
 use App\Models\VendorEvidence;
 use App\Models\VendorFinding;
+use App\Services\Metrics\WidgetCompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -23,6 +24,7 @@ final class VendorGovernanceController extends Controller
 
     public function __construct(
         private readonly GovernanceNarrativeCoordinatorInterface $governanceNarrativeCoordinator,
+        private readonly WidgetCompositionService $widgetCompositionService,
     ) {}
 
     public function show(Request $request, string $id): JsonResponse
@@ -56,6 +58,19 @@ final class VendorGovernanceController extends Controller
                     $this->userId($request),
                 )
                 ->toResponseArray(),
+        );
+    }
+
+    public function widgets(Request $request, string $id): JsonResponse
+    {
+        $tenantId = $this->tenantId($request);
+        $vendor = $this->findVendor($tenantId, $id);
+        if ($vendor === null) {
+            return response()->json(["message" => "Vendor not found"], 404);
+        }
+
+        return response()->json(
+            $this->widgetCompositionService->vendorWidgets($tenantId, $vendor),
         );
     }
 

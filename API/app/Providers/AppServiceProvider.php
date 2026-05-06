@@ -62,6 +62,12 @@ use App\Services\Ai\Contracts\AiProviderReadinessCheckerInterface;
 use App\Services\Ai\Contracts\ProviderContractVerifierInterface;
 use App\Services\Ai\ProviderContractVerificationService;
 use App\Services\JwtService;
+use App\Services\Metrics\AppMetricDefinitionCatalog;
+use App\Services\Metrics\MetricEvaluationService;
+use App\Services\Metrics\MetricInputRegistry;
+use App\Services\Metrics\MetricInputProvider;
+use App\Services\Metrics\ScorecardService;
+use App\Services\Metrics\WidgetCompositionService;
 use App\Services\Project\AtomyIncompleteTaskCount;
 use App\Services\Project\AtomyProjectPersist;
 use App\Services\Project\AtomyProjectQuery;
@@ -254,6 +260,19 @@ use Nexus\Outbox\Services\InMemoryOutboxStore;
 use Nexus\Outbox\Services\OutboxService;
 use Nexus\Outbox\Services\SystemClock as OutboxSystemClock;
 use Nexus\MachineLearning\Contracts\AiHealthProbeInterface;
+use Nexus\MetricEngine\Services\BatchFormulaEvaluatorService;
+use Nexus\MetricEngine\Services\ComparisonService;
+use Nexus\MetricEngine\Services\FormulaCatalogBuilderService;
+use Nexus\MetricEngine\Services\FormulaDefinitionSerializerService;
+use Nexus\MetricEngine\Services\FormulaEvaluatorService;
+use Nexus\MetricEngine\Services\FormulaGraphService;
+use Nexus\MetricEngine\Services\MetricRunFingerprintService;
+use Nexus\MetricEngine\Services\MetricStatusInferenceService;
+use Nexus\MetricEngine\Services\NumericValueService;
+use Nexus\MetricEngine\Services\PeriodComparatorService;
+use Nexus\MetricEngine\Services\ScalarMetricCalculatorService;
+use Nexus\MetricEngine\Services\TimeSeriesMetricCalculatorService;
+use Nexus\MetricEngine\Services\WindowResolverService;
 use Psr\Log\LoggerInterface;
 
 class AppServiceProvider extends ServiceProvider
@@ -462,6 +481,25 @@ class AppServiceProvider extends ServiceProvider
             GovernanceNarrativeCoordinatorInterface::class,
             GovernanceNarrativeCoordinator::class,
         );
+        $this->app->singleton(NumericValueService::class);
+        $this->app->singleton(PeriodComparatorService::class);
+        $this->app->singleton(ScalarMetricCalculatorService::class);
+        $this->app->singleton(WindowResolverService::class);
+        $this->app->singleton(ComparisonService::class);
+        $this->app->singleton(TimeSeriesMetricCalculatorService::class);
+        $this->app->singleton(FormulaEvaluatorService::class);
+        $this->app->singleton(FormulaGraphService::class);
+        $this->app->singleton(MetricStatusInferenceService::class);
+        $this->app->singleton(BatchFormulaEvaluatorService::class);
+        $this->app->singleton(FormulaDefinitionSerializerService::class);
+        $this->app->singleton(FormulaCatalogBuilderService::class);
+        $this->app->singleton(MetricRunFingerprintService::class);
+        $this->app->singleton(AppMetricDefinitionCatalog::class);
+        $this->app->singleton(MetricEvaluationService::class);
+        $this->app->singleton(MetricInputRegistry::class);
+        $this->app->singleton(MetricInputProvider::class);
+        $this->app->singleton(ScorecardService::class);
+        $this->app->singleton(WidgetCompositionService::class);
         $this->app->singleton(AiHealthProbeInterface::class, static function (
             $app,
         ): AiHealthProbeInterface {

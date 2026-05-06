@@ -27,10 +27,10 @@ export interface VendorRow {
   approvalRecord: VendorApprovalRecord | null;
   createdAt: string;
   updatedAt: string;
-  name?: string;
-  tradingName?: string;
-  countryCode?: string;
-  email?: string;
+  name?: string | null;
+  tradingName?: string | null;
+  countryCode?: string | null;
+  email?: string | null;
   phone?: string | null;
 }
 

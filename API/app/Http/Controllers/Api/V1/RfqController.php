@@ -17,6 +17,7 @@ use App\Models\Rfq;
 use App\Models\RfqLineItem;
 use App\Models\QuoteSubmission;
 use App\Models\VendorInvitation;
+use App\Services\Metrics\WidgetCompositionService;
 use App\Services\Project\ProjectAclService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -41,6 +42,7 @@ final class RfqController extends Controller
     public function __construct(
         private readonly ProjectAclService $projectAcl,
         private readonly RfqLifecycleCoordinatorInterface $rfqLifecycle,
+        private readonly WidgetCompositionService $widgetCompositionService,
     ) {
     }
 
@@ -487,6 +489,8 @@ final class RfqController extends Controller
             ];
         }
 
+        $widgetPayload = $this->widgetCompositionService->rfqOverviewWidgets($tenantId, $rfq);
+
         return response()->json([
             'data' => [
                 'rfq' => [
@@ -543,6 +547,8 @@ final class RfqController extends Controller
                     'approved_count' => $approvalsApproved,
                     'rejected_count' => $approvalsRejected,
                 ],
+                'widgets' => $widgetPayload['data']['widgets'],
+                'widget_meta' => $widgetPayload['meta'],
             ],
         ]);
     }

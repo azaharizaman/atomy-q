@@ -9,6 +9,9 @@ use App\Models\Award;
 use App\Models\QuoteSubmission;
 use App\Models\Rfq;
 use App\Models\VendorFinding;
+use App\Services\Metrics\MetricCardData;
+use App\Services\Metrics\MetricEvaluationService;
+use App\Services\Metrics\MetricInputRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Schema;
 use Nexus\InsightOperations\Contracts\DashboardFactsPortInterface;
@@ -25,29 +28,25 @@ use Nexus\InsightOperations\DTOs\MetricFactDto;
 final readonly class DashboardFactsAdapter implements
     DashboardFactsPortInterface
 {
+    public function __construct(
+        private MetricInputRegistry $inputRegistry,
+        private MetricEvaluationService $metricEvaluationService,
+    ) {}
+
     public function factsForTenant(string $tenantId): DashboardFactsDto
     {
         $tenantId = trim($tenantId);
-        $activeRfqs = $this->tenantRfqQuery($tenantId)
-            ->whereNotIn("status", ["cancelled", "closed"])
-            ->count();
-        $pendingApprovals = Approval::query()
-            ->where("tenant_id", $tenantId)
-            ->where("status", "pending")
-            ->count();
-        $quoteIntakeCount = QuoteSubmission::query()
-            ->where("tenant_id", $tenantId)
-            ->whereIn("status", [
-                "uploaded",
-                "extracting",
-                "normalizing",
-                "needs_review",
-            ])
-            ->count();
-        $awardsInFlight = Award::query()
-            ->where("tenant_id", $tenantId)
-            ->whereIn("status", ["pending", "protested"])
-            ->count();
+        $evaluatedMetrics = $this->metricEvaluationService->evaluate(
+            metricKeys: [
+                'procurement.active_rfqs',
+                'procurement.pending_approvals',
+                'procurement.quote_intake_count',
+                'procurement.awards_in_flight',
+                'procurement.total_savings',
+            ],
+            inputs: $this->inputRegistry->dashboard($tenantId),
+            metadata: ['tenant_id' => $tenantId, 'surface' => 'dashboard.kpis'],
+        );
         $riskAlertCount = VendorFinding::query()
             ->where("tenant_id", $tenantId)
             ->whereIn("severity", ["high", "critical"])
@@ -56,14 +55,11 @@ final readonly class DashboardFactsAdapter implements
 
         return new DashboardFactsDto(
             metrics: [
-                new MetricFactDto("active_rfqs", $activeRfqs),
-                new MetricFactDto("pending_approvals", $pendingApprovals),
-                new MetricFactDto("quote_intake_count", $quoteIntakeCount),
-                new MetricFactDto("awards_in_flight", $awardsInFlight),
-                new MetricFactDto(
-                    "total_savings",
-                    $this->totalSavings($tenantId),
-                ),
+                $this->toFact("active_rfqs", $evaluatedMetrics['cards']['procurement.active_rfqs']),
+                $this->toFact("pending_approvals", $evaluatedMetrics['cards']['procurement.pending_approvals']),
+                $this->toFact("quote_intake_count", $evaluatedMetrics['cards']['procurement.quote_intake_count']),
+                $this->toFact("awards_in_flight", $evaluatedMetrics['cards']['procurement.awards_in_flight']),
+                $this->toFact("total_savings", $evaluatedMetrics['cards']['procurement.total_savings']),
                 $this->averageCycleTime($tenantId),
                 new MetricFactDto("risk_alert_count", $riskAlertCount),
             ],
@@ -93,6 +89,16 @@ final readonly class DashboardFactsAdapter implements
         }
 
         return round($total, 2);
+    }
+
+    private function toFact(string $key, MetricCardData $card): MetricFactDto
+    {
+        return new MetricFactDto(
+            $key,
+            $card->value,
+            $card->status,
+            $card->reason,
+        );
     }
 
     private function averageCycleTime(string $tenantId): MetricFactDto

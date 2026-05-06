@@ -1,14 +1,38 @@
 'use client';
 
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { BarChart2, Download, TrendingUp } from 'lucide-react';
 import { AiNarrativePanel } from '@/components/ai/ai-narrative-panel';
 import { Button } from '@/components/ds/Button';
 import { PageHeader } from '@/components/ds/FilterBar';
 import { useReportingAiSummary } from '@/hooks/use-reporting-ai-summary';
+import { DashboardWidgetRenderer } from '@/components/metrics/DashboardWidgetRenderer';
+import { fetchLiveOrFail } from '@/lib/api-live';
+import type { WidgetPayload } from '@/types/metrics';
+
+type ReportingWidgetsResponse = {
+  data?: {
+    widgets?: WidgetPayload[];
+  };
+};
 
 export default function ReportingPage() {
   const reportingAiSummary = useReportingAiSummary();
+  const { data: widgets } = useQuery({
+    queryKey: ['reports', 'widgets'],
+    queryFn: async () => {
+      try {
+        const data = await fetchLiveOrFail<ReportingWidgetsResponse>('/reports/widgets');
+        return Array.isArray(data?.data?.widgets) ? data.data.widgets : [];
+      } catch (e) {
+        console.error('Failed to load reporting widgets:', e);
+        return [];
+      }
+    },
+  });
+
+  const kpiSummaryWidget = widgets?.find((widget) => widget.key === 'reporting.kpi_summary_widget');
 
   return (
     <div className="space-y-6">
@@ -38,27 +62,31 @@ export default function ReportingPage() {
         hideWhenEmpty
       />
 
-      <div className="rounded-lg border border-slate-200 bg-white p-8">
-        <div className="flex flex-col items-center justify-center text-center">
-          <div className="rounded-full bg-slate-100 p-4">
-            <BarChart2 size={32} className="text-slate-500" />
-          </div>
-          <h2 className="mt-4 text-lg font-semibold text-slate-900">Reports & analytics</h2>
-          <p className="mt-2 max-w-sm text-sm text-slate-500">
-            View spend by category, vendor scores, and cycle-time reports. AI summaries remain optional and never replace the factual reporting surface.
-          </p>
-          <div className="mt-6 flex gap-2">
-            <Button size="sm" variant="outline" disabled>
-              <TrendingUp size={14} className="mr-1.5" />
-              Spend trend
-            </Button>
-            <Button size="sm" variant="outline" disabled>
-              <BarChart2 size={14} className="mr-1.5" />
-              Vendor scores
-            </Button>
+      {kpiSummaryWidget ? (
+        <DashboardWidgetRenderer widget={kpiSummaryWidget} />
+      ) : (
+        <div className="rounded-lg border border-slate-200 bg-white p-8">
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="rounded-full bg-slate-100 p-4">
+              <BarChart2 size={32} className="text-slate-500" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-slate-900">Reports & analytics</h2>
+            <p className="mt-2 max-w-sm text-sm text-slate-500">
+              View spend by category, vendor scores, and cycle-time reports. AI summaries remain optional and never replace the factual reporting surface.
+            </p>
+            <div className="mt-6 flex gap-2">
+              <Button size="sm" variant="outline" disabled>
+                <TrendingUp size={14} className="mr-1.5" />
+                Spend trend
+              </Button>
+              <Button size="sm" variant="outline" disabled>
+                <BarChart2 size={14} className="mr-1.5" />
+                Vendor scores
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\ExtractsAuthContext;
 use App\Http\Controllers\Controller;
+use App\Services\Metrics\WidgetCompositionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Nexus\InsightOperations\Contracts\DashboardInsightCoordinatorInterface;
@@ -16,6 +17,7 @@ final class DashboardController extends Controller
 
     public function __construct(
         private readonly DashboardInsightCoordinatorInterface $dashboardInsightCoordinator,
+        private readonly WidgetCompositionService $widgetCompositionService,
     ) {}
 
     /**
@@ -46,6 +48,18 @@ final class DashboardController extends Controller
             $this->dashboardInsightCoordinator
                 ->generate($tenantId, $userId)
                 ->toResponseArray(),
+        );
+    }
+
+    /**
+     * Get dashboard widgets scoped by tenant.
+     *
+     * GET /dashboard/widgets
+     */
+    public function widgets(Request $request): JsonResponse
+    {
+        return response()->json(
+            $this->widgetCompositionService->dashboardWidgets($this->tenantId($request)),
         );
     }
 
